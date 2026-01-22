@@ -116,4 +116,10 @@ public final class Page {
         if (o instanceof Number n) return n.intValue();
         return Integer.parseInt(o.toString());
     }
+
+    /** @return number of records currently stored in this page. */
+    public int size() {
+        return numRecords;
+    }
+
 }
