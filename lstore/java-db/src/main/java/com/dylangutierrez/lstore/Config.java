@@ -53,7 +53,8 @@ public final class Config {
     // ----------------------------
     // DB-level durability metadata
     // ----------------------------
-    public static final String DB_METADATA_FILE = "metadata.json";
+    /* public static final String DB_METADATA_FILE = "metadata.json"; */
+    public static final String METADATA_FILE = "metadata.json";
     public static final String TABLE_FILE_SUFFIX = ".table.json";
 
     // ----------------------------

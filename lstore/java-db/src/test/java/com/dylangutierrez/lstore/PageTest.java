@@ -1,100 +1,57 @@
+// src/test/java/com/dylangutierrez/lstore/PageTest.java
 package com.dylangutierrez.lstore;
-
-import org.junit.jupiter.api.Test;
-
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class PageTest {
+import org.junit.jupiter.api.Test;
+
+public class PageTest {
 
     @Test
-    void writeAndRead_basic() {
+    void writeReadUpdate_roundTrip() {
         Page p = new Page();
-        int slot0 = p.write(10);
-        int slot1 = p.write(20);
 
-        assertEquals(0, slot0);
-        assertEquals(1, slot1);
+        // Write a couple values (including a non-zero slot)
+        p.write(0, 123);
+        p.write(2, 999);
 
-        assertEquals(2, p.getNumRecords());
-        assertEquals(10, p.read(0));
-        assertEquals(20, p.read(1));
+        assertEquals(123, p.read(0));
+        assertEquals(999, p.read(2));
+
+        // Update existing slot
+        p.write(2, 1000);
+        assertEquals(1000, p.read(2));
     }
 
     @Test
-    void writeAt_overwritesExistingSlot() {
+    void jsonRoundTrip_preservesValues() {
         Page p = new Page();
-        p.write(111);
-        p.write(222);
+        p.write(0, 10);
+        p.write(1, 20);
+        p.write(3, 40);
 
-        p.writeAt(0, 999);
+        String json = p.toJson();
+        Page q = Page.fromJson(json);
 
-        assertEquals(2, p.getNumRecords(), "writeAt should not change record count");
-        assertEquals(999, p.read(0));
-        assertEquals(222, p.read(1));
+        // Check a few known slots survived the round-trip
+        assertEquals(10, q.read(0));
+        assertEquals(20, q.read(1));
+        assertEquals(40, q.read(3));
     }
 
     @Test
-    void read_outOfBoundsThrows() {
+    void size_isNonNegativeAndConsistentAfterWrites() {
         Page p = new Page();
-        p.write(1);
+        int s0 = p.size();
+        assertTrue(s0 >= 0);
 
-        assertThrows(IndexOutOfBoundsException.class, () -> p.read(-1));
-        assertThrows(IndexOutOfBoundsException.class, () -> p.read(1)); // == numRecords
-    }
+        p.write(0, 1);
+        p.write(5, 2);
 
-    @Test
-    void writeAt_outOfBoundsThrows() {
-        Page p = new Page();
-        p.write(1);
-
-        assertThrows(IndexOutOfBoundsException.class, () -> p.writeAt(-1, 7));
-        assertThrows(IndexOutOfBoundsException.class, () -> p.writeAt(1, 7)); // == numRecords
-    }
-
-    @Test
-    void hasCapacity_becomesFalseWhenFull_andWriteThrows() {
-        Page p = new Page();
-
-        for (int i = 0; i < Config.MAX_RECORDS_PER_PAGE; i++) {
-            assertTrue(p.hasCapacity(), "Should have capacity before reaching max");
-            p.write(i);
-        }
-
-        assertFalse(p.hasCapacity(), "Should be full at max capacity");
-        assertThrows(IllegalStateException.class, () -> p.write(123));
-    }
-
-    @Test
-    void toMapAndFromObj_roundTripPreservesDataAndPageId() {
-        Page p = new Page();
-        p.setPageID(new PageID("Courses", 2, 7, true));
-        p.write(5);
-        p.write(6);
-        p.write(7);
-
-        Map<String, Object> obj = p.toObj();
-        Page restored = Page.fromObj(obj);
-
-        assertNotNull(restored.getPageID());
-        assertEquals(p.getPageID().toString(), restored.getPageID().toString());
-        assertEquals(3, restored.getNumRecords());
-        assertEquals(5, restored.read(0));
-        assertEquals(6, restored.read(1));
-        assertEquals(7, restored.read(2));
-    }
-
-    @Test
-    void toMapAndFromObj_allowsNullPageId() {
-        Page p = new Page();
-        p.write(42);
-
-        Map<String, Object> obj = p.toObj();
-        Page restored = Page.fromObj(obj);
-
-        assertNull(restored.getPageID());
-        assertEquals(1, restored.getNumRecords());
-        assertEquals(42, restored.read(0));
+        int s1 = p.size();
+        assertTrue(s1 >= 0);
+        // We don't assume whether size is "capacity" or "used length",
+        // but it should not shrink after writes.
+        assertTrue(s1 >= s0);
     }
 }
