@@ -216,7 +216,8 @@ public class Table {
     }
 
     private Path tableDir() {
-        return Paths.get(Config.DATA_DIR, name);
+        String dataDir = System.getProperty("lstore.data_dir", Config.DATA_DIR);
+        return Paths.get(dataDir, name);
     }
 
     private Path metadataPath() {
