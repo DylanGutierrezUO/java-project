@@ -3,157 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Interactive grade distribution dashboard for exploring A and F percentages by course, instructor, and department.">
-    <title>Java-DB Grade Explorer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/styles.css">
+    <title>Grade Distribution Dashboard</title>
+    <meta
+        name="description"
+        content="Interactive dashboard for comparing grade distributions by course, instructor, and department."
+    >
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/app.js" defer></script>
 </head>
 <body>
-    <div class="page-shell">
-        <header class="hero">
-            <div class="hero__content">
-                <p class="eyebrow">Portfolio Project</p>
-                <h1>Java-DB Grade Explorer</h1>
-                <p class="hero__subtitle">
-                    Explore how grade outcomes vary across courses, instructors, and departments.
-                    This first sprint focuses on a polished single-page dashboard with an interactive bar chart.
+    <div class="site-shell">
+        <header class="site-header">
+            <div class="site-header__content">
+                <p class="site-header__eyebrow">Portfolio Project</p>
+                <h1 class="site-header__title">Grade Distribution Dashboard</h1>
+                <p class="site-header__subtitle">
+                    Explore A and F grade percentages across courses, instructors, and departments.
                 </p>
-            </div>
-            <div class="hero__badge">
-                <span>Vanilla JS</span>
-                <span>Single Page</span>
-                <span>GitHub Pages Ready</span>
             </div>
         </header>
 
-        <main class="dashboard" aria-label="Grade explorer dashboard">
-            <section class="panel controls-panel" aria-labelledby="controls-title">
+        <main class="dashboard">
+            <section class="panel panel--controls" aria-labelledby="controls-title">
                 <div class="panel__header">
-                    <div>
-                        <p class="section-label">Controls</p>
-                        <h2 id="controls-title">Build a comparison</h2>
-                    </div>
-                    <button id="reset-button" class="button button--ghost" type="button">Reset</button>
+                    <h2 id="controls-title">Controls</h2>
+                    <p>Choose a metric, grouping, and optional filter to update the visualization.</p>
                 </div>
 
-                <form id="controls-form" class="controls-grid">
-                    <label class="field">
-                        <span class="field__label">Metric</span>
-                        <select id="metric-select" name="metric">
-                            <option value="A">A Percentage</option>
-                            <option value="F">F Percentage</option>
-                        </select>
-                    </label>
+                <form id="controls-form" class="controls-form">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label for="metric-select">Metric</label>
+                            <select id="metric-select" name="metric">
+                                <option value="A">A Percentage</option>
+                                <option value="F">F Percentage</option>
+                            </select>
+                        </div>
 
-                    <label class="field">
-                        <span class="field__label">Compare By</span>
-                        <select id="group-select" name="groupBy">
-                            <option value="instructor">Instructor</option>
-                            <option value="course">Course</option>
-                            <option value="department">Department</option>
-                        </select>
-                    </label>
+                        <div class="form-field">
+                            <label for="group-select">Group By</label>
+                            <select id="group-select" name="groupBy">
+                                <option value="instructor">Instructor</option>
+                                <option value="course">Course</option>
+                                <option value="department">Department</option>
+                            </select>
+                        </div>
 
-                    <label class="field">
-                        <span class="field__label">Filter Type</span>
-                        <select id="filter-type-select" name="filterType">
-                            <option value="none">No Filter</option>
-                            <option value="course">Course</option>
-                            <option value="instructor">Instructor</option>
-                            <option value="department">Department</option>
-                        </select>
-                    </label>
+                        <div class="form-field">
+                            <label for="filter-type-select">Filter Type</label>
+                            <select id="filter-type-select" name="filterType">
+                                <option value="none">No Filter</option>
+                                <option value="course">Course</option>
+                                <option value="instructor">Instructor</option>
+                                <option value="department">Department</option>
+                            </select>
+                        </div>
 
-                    <label class="field field--wide">
-                        <span class="field__label">Filter Value</span>
-                        <input
-                            id="filter-input"
-                            name="filterValue"
-                            type="text"
-                            placeholder="Examples: CS415, Smith, CS"
-                            autocomplete="off"
-                        >
-                    </label>
+                        <div class="form-field">
+                            <label for="filter-input">Filter Value</label>
+                            <input
+                                id="filter-input"
+                                name="filterValue"
+                                type="text"
+                                placeholder="Example: CS, Smith, or CS415"
+                                autocomplete="off"
+                            >
+                        </div>
+                    </div>
 
-                    <div class="actions">
-                        <button id="render-button" class="button button--primary" type="submit">Update Graph</button>
+                    <div class="form-actions">
+                        <button type="submit" class="button button--primary">Update View</button>
+                        <button type="button" id="reset-button" class="button button--secondary">Reset</button>
                     </div>
                 </form>
             </section>
 
-            <section class="panel chart-panel" aria-labelledby="chart-title">
-                <div class="panel__header panel__header--stacked">
+            <section class="panel panel--chart" aria-labelledby="chart-title">
+                <div class="panel__header">
                     <div>
-                        <p class="section-label">Visualization</p>
-                        <h2 id="chart-title">Bar chart</h2>
+                        <h2 id="chart-title">Bar Chart</h2>
+                        <p id="chart-description">
+                            Displaying current results for the selected metric and grouping.
+                        </p>
                     </div>
-                    <p id="chart-description" class="muted-text">
-                        Showing demo data for the current sprint shell.
-                    </p>
                 </div>
 
-                <div id="chart-empty-state" class="empty-state" hidden>
-                    <h3>No data matched this selection.</h3>
-                    <p>Try changing the filter or using a broader comparison.</p>
-                </div>
+                <div class="chart-card">
+                    <div
+                        id="chart-empty-state"
+                        class="chart-empty-state"
+                        hidden
+                        aria-live="polite"
+                    >
+                        No values are available for the current selection.
+                    </div>
 
-                <div id="chart-container" class="chart-container" role="img" aria-label="Bar chart of selected grade metric by category">
-                    <div id="chart-bars" class="chart-bars"></div>
-                    <div id="chart-axis" class="chart-axis" aria-hidden="true"></div>
+                    <div
+                        id="chart-bars"
+                        class="chart-bars"
+                        role="img"
+                        aria-label="Bar chart showing grouped grade percentages"
+                    ></div>
                 </div>
             </section>
 
-            <section class="summary-grid" aria-label="Summary cards">
-                <article class="panel stat-card">
-                    <p class="section-label">Top Result</p>
-                    <h2 id="top-group-label">—</h2>
-                    <p id="top-group-value" class="stat-value">—</p>
-                </article>
+            <section class="panel panel--summary" aria-labelledby="summary-title">
+                <div class="panel__header">
+                    <h2 id="summary-title">Summary</h2>
+                    <p>Quick highlights for the current view.</p>
+                </div>
 
-                <article class="panel stat-card">
-                    <p class="section-label">Displayed Groups</p>
-                    <h2 id="group-count">0</h2>
-                    <p class="muted-text">Number of bars currently shown</p>
-                </article>
+                <div class="summary-grid">
+                    <article class="summary-card">
+                        <span class="summary-card__label">Top Group</span>
+                        <strong id="top-group-label" class="summary-card__value">—</strong>
+                    </article>
 
-                <article class="panel stat-card">
-                    <p class="section-label">Current View</p>
-                    <h2 id="current-view">—</h2>
-                    <p id="current-filter" class="muted-text">No filter applied</p>
-                </article>
+                    <article class="summary-card">
+                        <span class="summary-card__label">Top Value</span>
+                        <strong id="top-group-value" class="summary-card__value">—</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span class="summary-card__label">Groups Returned</span>
+                        <strong id="group-count" class="summary-card__value">0</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span class="summary-card__label">Current View</span>
+                        <strong id="current-view" class="summary-card__value summary-card__value--small">
+                            —
+                        </strong>
+                    </article>
+
+                    <article class="summary-card summary-card--wide">
+                        <span class="summary-card__label">Active Filter</span>
+                        <strong id="current-filter" class="summary-card__value summary-card__value--small">
+                            No filter applied
+                        </strong>
+                    </article>
+                </div>
             </section>
 
-            <section class="panel table-panel" aria-labelledby="table-title">
-                <div class="panel__header panel__header--stacked">
-                    <div>
-                        <p class="section-label">Breakdown</p>
-                        <h2 id="table-title">Rendered values</h2>
-                    </div>
-                    <p class="muted-text">Useful for quick verification while the data pipeline is still being connected.</p>
+            <section class="panel panel--results" aria-labelledby="results-title">
+                <div class="panel__header">
+                    <h2 id="results-title">Results</h2>
+                    <p>Detailed grouped values for the current chart.</p>
                 </div>
 
                 <div class="table-wrap">
-                    <table>
+                    <table class="results-table">
                         <thead>
                             <tr>
-                                <th scope="col">Label</th>
+                                <th scope="col">Group</th>
                                 <th scope="col">Metric</th>
                                 <th scope="col">Sample Size</th>
                             </tr>
                         </thead>
-                        <tbody id="results-body"></tbody>
+                        <tbody id="results-body">
+                            <tr>
+                                <td colspan="3">Loading results...</td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
             </section>
         </main>
 
         <footer class="site-footer">
-            <p>Built from a Java-backed storage project and presented as a GitHub Pages-ready frontend.</p>
+            <p>Built with vanilla JavaScript for interactive academic data visualization.</p>
         </footer>
     </div>
-
-    <script src="./js/app.js" defer></script>
 </body>
 </html>
