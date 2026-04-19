@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grade Distribution Dashboard</title>
+    <meta
+        name="description"
+        content="Interactive dashboard for comparing grade distributions by course, instructor, and department."
+    >
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/app.js" defer></script>
+</head>
+<body>
+    <div class="site-shell">
+        <header class="site-header">
+            <div class="site-header__content">
+                <p class="site-header__eyebrow">Portfolio Project</p>
+                <h1 class="site-header__title">Grade Distribution Dashboard</h1>
+                <p class="site-header__subtitle">
+                    Explore A and F grade percentages across courses, instructors, and departments.
+                </p>
+            </div>
+        </header>
+
+        <main class="dashboard">
+            <section class="panel panel--controls" aria-labelledby="controls-title">
+                <div class="panel__header">
+                    <h2 id="controls-title">Controls</h2>
+                    <p>Choose a metric, grouping, and optional filter to update the visualization.</p>
+                </div>
+
+                <form id="controls-form" class="controls-form">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label for="metric-select">Metric</label>
+                            <select id="metric-select" name="metric">
+                                <option value="A">A Percentage</option>
+                                <option value="F">F Percentage</option>
+                            </select>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="group-select">Group By</label>
+                            <select id="group-select" name="groupBy">
+                                <option value="instructor">Instructor</option>
+                                <option value="course">Course</option>
+                                <option value="department">Department</option>
+                            </select>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="filter-type-select">Filter Type</label>
+                            <select id="filter-type-select" name="filterType">
+                                <option value="none">No Filter</option>
+                                <option value="course">Course</option>
+                                <option value="instructor">Instructor</option>
+                                <option value="department">Department</option>
+                            </select>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="filter-input">Filter Value</label>
+                            <input
+                                id="filter-input"
+                                name="filterValue"
+                                type="text"
+                                placeholder="Example: CS, Smith, or CS415"
+                                autocomplete="off"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="button button--primary">Update View</button>
+                        <button type="button" id="reset-button" class="button button--secondary">Reset</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel panel--chart" aria-labelledby="chart-title">
+                <div class="panel__header">
+                    <div>
+                        <h2 id="chart-title">Bar Chart</h2>
+                        <p id="chart-description">
+                            Displaying current results for the selected metric and grouping.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <div
+                        id="chart-empty-state"
+                        class="chart-empty-state"
+                        hidden
+                        aria-live="polite"
+                    >
+                        No values are available for the current selection.
+                    </div>
+
+                    <div
+                        id="chart-bars"
+                        class="chart-bars"
+                        role="img"
+                        aria-label="Bar chart showing grouped grade percentages"
+                    ></div>
+                </div>
+            </section>
+
+            <section class="panel panel--summary" aria-labelledby="summary-title">
+                <div class="panel__header">
+                    <h2 id="summary-title">Summary</h2>
+                    <p>Quick highlights for the current view.</p>
+                </div>
+
+                <div class="summary-grid">
+                    <article class="summary-card">
+                        <span class="summary-card__label">Top Group</span>
+                        <strong id="top-group-label" class="summary-card__value">—</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span class="summary-card__label">Top Value</span>
+                        <strong id="top-group-value" class="summary-card__value">—</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span class="summary-card__label">Groups Returned</span>
+                        <strong id="group-count" class="summary-card__value">0</strong>
+                    </article>
+
+                    <article class="summary-card">
+                        <span class="summary-card__label">Current View</span>
+                        <strong id="current-view" class="summary-card__value summary-card__value--small">
+                            —
+                        </strong>
+                    </article>
+
+                    <article class="summary-card summary-card--wide">
+                        <span class="summary-card__label">Active Filter</span>
+                        <strong id="current-filter" class="summary-card__value summary-card__value--small">
+                            No filter applied
+                        </strong>
+                    </article>
+                </div>
+            </section>
+
+            <section class="panel panel--results" aria-labelledby="results-title">
+                <div class="panel__header">
+                    <h2 id="results-title">Results</h2>
+                    <p>Detailed grouped values for the current chart.</p>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Group</th>
+                                <th scope="col">Metric</th>
+                                <th scope="col">Sample Size</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-body">
+                            <tr>
+                                <td colspan="3">Loading results...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <p>Built with vanilla JavaScript for interactive academic data visualization.</p>
+        </footer>
+    </div>
+</body>
+</html>
