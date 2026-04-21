@@ -178,6 +178,16 @@ select {
         transform 0.2s ease;
 }
 
+select option {
+    color: #111827;
+    background-color: #ffffff;
+}
+
+select option:checked {
+    color: #111827;
+    background-color: #dbeafe;
+}
+
 input::placeholder {
     color: #8090ad;
 }

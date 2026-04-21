@@ -1,25 +1,6 @@
 (() => {
     "use strict";
 
-    /**
-     * Temporary in-browser dataset for Sprint 1.
-     * This will be replaced by JSON loading in a later sprint.
-     */
-    const demoRows = [
-        { courseId: "CS415", instructor: "Smith", a: 72.4, f: 4.1, sampleSize: 12 },
-        { courseId: "CS415", instructor: "Johnson", a: 65.8, f: 7.3, sampleSize: 10 },
-        { courseId: "CS330", instructor: "Smith", a: 59.2, f: 8.6, sampleSize: 9 },
-        { courseId: "CS330", instructor: "Patel", a: 81.7, f: 2.1, sampleSize: 11 },
-        { courseId: "MATH251", instructor: "Garcia", a: 48.9, f: 10.8, sampleSize: 14 },
-        { courseId: "MATH251", instructor: "Nguyen", a: 63.1, f: 6.2, sampleSize: 13 },
-        { courseId: "WR320", instructor: "Lopez", a: 84.5, f: 1.7, sampleSize: 7 },
-        { courseId: "WR320", instructor: "Smith", a: 76.3, f: 2.4, sampleSize: 8 },
-        { courseId: "HIST201", instructor: "Baker", a: 57.4, f: 5.9, sampleSize: 6 },
-        { courseId: "HIST201", instructor: "Diaz", a: 69.3, f: 3.8, sampleSize: 9 },
-        { courseId: "BIO212", instructor: "Chen", a: 61.7, f: 6.6, sampleSize: 10 },
-        { courseId: "BIO212", instructor: "Miller", a: 55.4, f: 9.4, sampleSize: 10 }
-    ];
-
     const initialState = Object.freeze({
         metric: "A",
         groupBy: "instructor",
@@ -50,20 +31,20 @@
     function init() {
         syncControlsToState();
         bindEvents();
-        renderDashboard();
+        loadDashboard();
     }
 
     function bindEvents() {
-        elements.form.addEventListener("submit", (event) => {
+        elements.form.addEventListener("submit", async (event) => {
             event.preventDefault();
             updateStateFromControls();
-            renderDashboard();
+            await loadDashboard();
         });
 
-        elements.resetButton.addEventListener("click", () => {
+        elements.resetButton.addEventListener("click", async () => {
             Object.assign(state, initialState);
             syncControlsToState();
-            renderDashboard();
+            await loadDashboard();
         });
     }
 
@@ -81,85 +62,78 @@
         elements.filterInput.value = state.filterValue;
     }
 
-    function renderDashboard() {
-        const filteredRows = applyFilters(demoRows, state);
-        const groupedRows = buildGroups(filteredRows, state.groupBy, state.metric);
+    async function loadDashboard() {
+        try {
+            setLoadingState();
 
-        renderChart(groupedRows, state.metric);
-        renderSummary(groupedRows, filteredRows, state);
-        renderTable(groupedRows, state.metric);
-    }
+            const payload = await fetchDistribution(state);
+            const groups = Array.isArray(payload.groups) ? payload.groups : [];
+            const summary = payload.summary ?? {
+                matchingRows: 0,
+                groupsReturned: 0,
+                topGroup: "",
+                topValue: 0
+            };
 
-    function applyFilters(rows, currentState) {
-        if (currentState.filterType === "none" || currentState.filterValue.length === 0) {
-            return [...rows];
+            renderChart(groups, state.metric);
+            renderSummary(groups, summary, state);
+            renderTable(groups, state.metric);
+        } catch (error) {
+            renderError(error);
         }
-
-        const needle = currentState.filterValue.toLowerCase();
-
-        return rows.filter((row) => {
-            if (currentState.filterType === "course") {
-                return row.courseId.toLowerCase().includes(needle);
-            }
-
-            if (currentState.filterType === "instructor") {
-                return row.instructor.toLowerCase().includes(needle);
-            }
-
-            if (currentState.filterType === "department") {
-                return deriveDepartment(row.courseId).toLowerCase().includes(needle);
-            }
-
-            return true;
-        });
     }
 
-    function buildGroups(rows, groupBy, metric) {
-        const groups = new Map();
-
-        rows.forEach((row) => {
-            const groupLabel = getGroupLabel(row, groupBy);
-            const metricValue = metric === "A" ? row.a : row.f;
-
-            if (!groups.has(groupLabel)) {
-                groups.set(groupLabel, {
-                    label: groupLabel,
-                    metricTotal: 0,
-                    count: 0,
-                    sampleSizeTotal: 0
-                });
-            }
-
-            const group = groups.get(groupLabel);
-            group.metricTotal += metricValue;
-            group.count += 1;
-            group.sampleSizeTotal += row.sampleSize;
+    async function fetchDistribution(currentState) {
+        const params = new URLSearchParams({
+            metric: currentState.metric,
+            groupBy: currentState.groupBy,
+            filterType: currentState.filterType,
+            filterValue: currentState.filterValue
         });
 
-        return [...groups.values()]
-            .map((group) => ({
-                label: group.label,
-                value: roundToOneDecimal(group.metricTotal / group.count),
-                sampleSize: group.sampleSizeTotal
-            }))
-            .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label));
-    }
+        const response = await fetch(`/api/v1/grades/distribution?${params.toString()}`, {
+            headers: {
+                "Accept": "application/json"
+            }
+        });
 
-    function getGroupLabel(row, groupBy) {
-        if (groupBy === "course") {
-            return row.courseId;
+        if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
         }
 
-        if (groupBy === "department") {
-            return deriveDepartment(row.courseId);
-        }
-
-        return row.instructor;
+        return response.json();
     }
 
-    function deriveDepartment(courseId) {
-        const match = String(courseId).trim().match(/^[A-Za-z]+/);
-        return match ? match[0].toUpperCase() : "UNKNOWN";
+    function setLoadingState() {
+        elements.chartEmptyState.hidden = false;
+        elements.chartEmptyState.textContent = "Loading data...";
+        elements.chartBars.innerHTML = "";
+        elements.resultsBody.innerHTML = `
+            <tr>
+                <td colspan="3">Loading results...</td>
+            </tr>
+        `;
+        elements.chartDescription.textContent = "Fetching distribution data from the backend...";
+        elements.topGroupLabel.textContent = "Loading...";
+        elements.topGroupValue.textContent = "—";
+        elements.groupCount.textContent = "0";
+        elements.currentView.textContent = `${capitalize(state.metric)} Percentage by ${capitalize(state.groupBy)}`;
+        elements.currentFilter.textContent = buildFilterLabel(state);
+    }
+
+    function renderError(error) {
+        elements.chartBars.innerHTML = "";
+        elements.chartEmptyState.hidden = false;
+        elements.chartEmptyState.textContent = "Unable to load data from the backend.";
+        elements.chartDescription.textContent = error.message;
+        elements.resultsBody.innerHTML = `
+            <tr>
+                <td colspan="3">Unable to load results.</td>
+            </tr>
+        `;
+        elements.topGroupLabel.textContent = "Error";
+        elements.topGroupValue.textContent = "—";
+        elements.groupCount.textContent = "0";
     }
 
     function renderChart(groupedRows, metric) {
@@ -167,6 +141,7 @@
 
         if (groupedRows.length === 0) {
             elements.chartEmptyState.hidden = false;
+            elements.chartEmptyState.textContent = "No values are available for the current selection.";
             elements.chartDescription.textContent = "No values are available for the current selection.";
             return;
         }
@@ -184,12 +159,12 @@
 
             const value = document.createElement("div");
             value.className = "chart-bar__value";
-            value.textContent = `${row.value.toFixed(1)}%`;
+            value.textContent = `${Number(row.value).toFixed(1)}%`;
 
             const column = document.createElement("div");
             column.className = "chart-bar__column";
             column.style.height = `${heightPercent}%`;
-            column.title = `${row.label}: ${row.value.toFixed(1)}%`;
+            column.title = `${row.label}: ${Number(row.value).toFixed(1)}%`;
 
             const label = document.createElement("div");
             label.className = "chart-bar__label";
@@ -200,14 +175,12 @@
         });
     }
 
-    function renderSummary(groupedRows, filteredRows, currentState) {
+    function renderSummary(groupedRows, summary, currentState) {
         const metricLabel = currentState.metric === "A" ? "A Percentage" : "F Percentage";
-        const viewLabel = `${capitalize(currentState.groupBy)} Comparison`;
-        const filterLabel = buildFilterLabel(currentState);
 
         elements.currentView.textContent = `${metricLabel} by ${capitalize(currentState.groupBy)}`;
-        elements.currentFilter.textContent = filterLabel;
-        elements.groupCount.textContent = String(groupedRows.length);
+        elements.currentFilter.textContent = buildFilterLabel(currentState);
+        elements.groupCount.textContent = String(summary.groupsReturned ?? groupedRows.length);
 
         if (groupedRows.length === 0) {
             elements.topGroupLabel.textContent = "No Result";
@@ -215,12 +188,12 @@
             return;
         }
 
-        const topGroup = groupedRows[0];
-        elements.topGroupLabel.textContent = topGroup.label;
-        elements.topGroupValue.textContent = `${topGroup.value.toFixed(1)}%`;
+        elements.topGroupLabel.textContent = summary.topGroup || groupedRows[0].label;
+        elements.topGroupValue.textContent = `${Number(summary.topValue ?? groupedRows[0].value).toFixed(1)}%`;
 
-        const matchCount = filteredRows.length;
-        elements.chartDescription.textContent = `${viewLabel} using ${metricLabel.toLowerCase()} across ${matchCount} matching row${matchCount === 1 ? "" : "s"}.`;
+        const matchCount = summary.matchingRows ?? 0;
+        elements.chartDescription.textContent =
+            `${capitalize(currentState.groupBy)} comparison using ${metricLabel.toLowerCase()} across ${matchCount} matching row${matchCount === 1 ? "" : "s"}.`;
     }
 
     function renderTable(groupedRows, metric) {
@@ -239,7 +212,7 @@
             const row = document.createElement("tr");
             row.innerHTML = `
                 <td>${escapeHtml(group.label)}</td>
-                <td>${group.value.toFixed(1)}% ${metric}</td>
+                <td>${Number(group.value).toFixed(1)}% ${metric}</td>
                 <td>${group.sampleSize}</td>
             `;
             elements.resultsBody.appendChild(row);
@@ -254,12 +227,9 @@
         return `${capitalize(currentState.filterType)} filter: ${currentState.filterValue}`;
     }
 
-    function roundToOneDecimal(value) {
-        return Math.round(value * 10) / 10;
-    }
-
     function capitalize(value) {
-        return String(value).charAt(0).toUpperCase() + String(value).slice(1);
+        const text = String(value);
+        return text.charAt(0).toUpperCase() + text.slice(1);
     }
 
     function escapeHtml(value) {
