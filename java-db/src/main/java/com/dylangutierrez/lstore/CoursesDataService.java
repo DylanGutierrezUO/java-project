@@ -1,6 +1,7 @@
 package com.dylangutierrez.lstore;
 
 import com.dylangutierrez.lstore.dataset.json.MiniJson;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,12 @@ import java.util.*;
 public class CoursesDataService {
 
     private static final String TABLE_NAME = "Courses";
+    private static final String ALL_VALUE = "ALL";
+
+    private static final int DEFAULT_GROUP_LIMIT = 10;
+    private static final int MIN_INSTRUCTOR_RECORDS = 5;
+    private static final int MIN_COURSE_RECORDS = 3;
+    private static final int MIN_DEPARTMENT_RECORDS = 1;
 
     // Logical user-column indices in Record.columns
     private static final int COL_COURSE_ID = 0;
@@ -32,44 +39,84 @@ public class CoursesDataService {
 
     private volatile List<CourseRow> cachedRows;
 
+    @PostConstruct
+    public void warmCacheOnStartup() {
+        long start = System.currentTimeMillis();
+        System.out.println("Warming Courses data cache...");
+
+        int rowCount = loadRowsIfNeeded().size();
+
+        long elapsed = System.currentTimeMillis() - start;
+        System.out.println("Courses data cache ready. Loaded " + rowCount + " rows in " + elapsed + " ms.");
+    }
+
     /**
-     * Returns chart-ready grouped data for the requested metric/filter settings.
+     * Returns options used to populate the frontend dropdowns.
+     */
+    public OptionsData getOptions() {
+        List<CourseRow> rows = loadRowsIfNeeded();
+
+        Set<String> departments = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        Map<String, Set<String>> groupedCourses = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
+        for (CourseRow row : rows) {
+            String department = deriveDepartment(row.courseId());
+            departments.add(department);
+
+            groupedCourses
+                    .computeIfAbsent(department, key -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER))
+                    .add(row.courseId());
+        }
+
+        Map<String, List<String>> coursesByDepartment = new LinkedHashMap<>();
+        for (String department : departments) {
+            Set<String> courses = groupedCourses.getOrDefault(
+                    department,
+                    new TreeSet<>(String.CASE_INSENSITIVE_ORDER)
+            );
+            coursesByDepartment.put(department, new ArrayList<>(courses));
+        }
+
+        return new OptionsData(
+                new ArrayList<>(departments),
+                coursesByDepartment
+        );
+    }
+
+    /**
+     * Returns chart-ready grouped data for the requested selections.
      */
     public DistributionData getDistribution(
             String metric,
-            String groupBy,
-            String filterType,
-            String filterValue
+            String department,
+            String course
     ) {
         String normalizedMetric = normalizeMetric(metric);
-        String normalizedGroupBy = normalizeGroupBy(groupBy);
-        String normalizedFilterType = normalizeFilterType(filterType);
-        String normalizedFilterValue = (filterValue == null) ? "" : filterValue.trim();
+        String normalizedDepartment = normalizeSelection(department);
+        String normalizedCourse = normalizeSelection(course);
 
-        List<CourseRow> filteredRows = applyFilters(
-                loadRowsIfNeeded(),
-                normalizedFilterType,
-                normalizedFilterValue
-        );
+        String level;
+        List<CourseRow> filteredRows;
 
-        List<GroupData> groups = buildGroups(filteredRows, normalizedGroupBy, normalizedMetric);
+        if (!ALL_VALUE.equals(normalizedCourse)) {
+            filteredRows = filterRows(normalizedDepartment, normalizedCourse);
+            level = "instructor";
+        } else if (!ALL_VALUE.equals(normalizedDepartment)) {
+            filteredRows = filterRows(normalizedDepartment, ALL_VALUE);
+            level = "course";
+        } else {
+            filteredRows = loadRowsIfNeeded();
+            level = "department";
+        }
+
+        List<GroupData> groups = buildGroups(filteredRows, level, normalizedMetric);
 
         String topGroup = groups.isEmpty() ? "" : groups.get(0).label();
         double topValue = groups.isEmpty() ? 0.0 : groups.get(0).value();
 
         return new DistributionData(
-                new QueryData(
-                        normalizedMetric,
-                        normalizedGroupBy,
-                        normalizedFilterType,
-                        normalizedFilterValue
-                ),
-                new SummaryData(
-                        filteredRows.size(),
-                        groups.size(),
-                        topGroup,
-                        topValue
-                ),
+                new QueryData(normalizedMetric, normalizedDepartment, normalizedCourse, level),
+                new SummaryData(filteredRows.size(), groups.size(), topGroup, topValue),
                 groups
         );
     }
@@ -103,7 +150,9 @@ public class CoursesDataService {
         try {
             Table table = database.getTable(TABLE_NAME);
             if (table == null) {
-                throw new IllegalStateException("Courses table was not found in data directory: " + dataDir.toAbsolutePath());
+                throw new IllegalStateException(
+                        "Courses table was not found in data directory: " + dataDir.toAbsolutePath()
+                );
             }
 
             Path tableDir = dataDir.resolve(TABLE_NAME);
@@ -190,23 +239,19 @@ public class CoursesDataService {
         return out;
     }
 
-    private List<CourseRow> applyFilters(List<CourseRow> rows, String filterType, String filterValue) {
-        if ("none".equals(filterType) || filterValue.isBlank()) {
-            return rows;
-        }
-
-        String needle = filterValue.toLowerCase(Locale.ROOT);
+    private List<CourseRow> filterRows(String department, String course) {
         List<CourseRow> filtered = new ArrayList<>();
 
-        for (CourseRow row : rows) {
-            boolean matches = switch (filterType) {
-                case "course" -> row.courseId().toLowerCase(Locale.ROOT).contains(needle);
-                case "instructor" -> row.instructor().toLowerCase(Locale.ROOT).contains(needle);
-                case "department" -> deriveDepartment(row.courseId()).toLowerCase(Locale.ROOT).contains(needle);
-                default -> true;
-            };
+        for (CourseRow row : loadRowsIfNeeded()) {
+            boolean matchesDepartment =
+                    ALL_VALUE.equals(department)
+                            || deriveDepartment(row.courseId()).equalsIgnoreCase(department);
 
-            if (matches) {
+            boolean matchesCourse =
+                    ALL_VALUE.equals(course)
+                            || row.courseId().equalsIgnoreCase(course);
+
+            if (matchesDepartment && matchesCourse) {
                 filtered.add(row);
             }
         }
@@ -214,14 +259,14 @@ public class CoursesDataService {
         return filtered;
     }
 
-    private List<GroupData> buildGroups(List<CourseRow> rows, String groupBy, String metric) {
+    private List<GroupData> buildGroups(List<CourseRow> rows, String level, String metric) {
         Map<String, GroupAccumulator> grouped = new LinkedHashMap<>();
 
         for (CourseRow row : rows) {
-            String label = switch (groupBy) {
+            String label = switch (level) {
                 case "course" -> row.courseId();
-                case "department" -> deriveDepartment(row.courseId());
-                default -> row.instructor();
+                case "instructor" -> row.instructor();
+                default -> deriveDepartment(row.courseId());
             };
 
             double value = "F".equals(metric) ? row.f() : row.a();
@@ -231,9 +276,16 @@ public class CoursesDataService {
             acc.count += 1;
         }
 
+        int minRecordThreshold = minimumRecordThreshold(level);
+
         List<GroupData> results = new ArrayList<>();
         for (Map.Entry<String, GroupAccumulator> entry : grouped.entrySet()) {
             GroupAccumulator acc = entry.getValue();
+
+            if (acc.count < minRecordThreshold) {
+                continue;
+            }
+
             double average = roundToOneDecimal(acc.metricTotal / acc.count);
 
             results.add(new GroupData(
@@ -245,10 +297,22 @@ public class CoursesDataService {
 
         results.sort(
                 Comparator.comparingDouble(GroupData::value).reversed()
-                        .thenComparing(GroupData::label)
+                        .thenComparing(GroupData::label, String.CASE_INSENSITIVE_ORDER)
         );
 
+        if (results.size() > DEFAULT_GROUP_LIMIT) {
+            return new ArrayList<>(results.subList(0, DEFAULT_GROUP_LIMIT));
+        }
+
         return results;
+    }
+
+    private int minimumRecordThreshold(String level) {
+        return switch (level) {
+            case "course" -> MIN_COURSE_RECORDS;
+            case "instructor" -> MIN_INSTRUCTOR_RECORDS;
+            default -> MIN_DEPARTMENT_RECORDS;
+        };
     }
 
     private String deriveDepartment(String courseId) {
@@ -270,27 +334,11 @@ public class CoursesDataService {
         return "F".equalsIgnoreCase(metric) ? "F" : "A";
     }
 
-    private String normalizeGroupBy(String groupBy) {
-        if ("course".equalsIgnoreCase(groupBy)) {
-            return "course";
+    private String normalizeSelection(String value) {
+        if (value == null || value.isBlank() || ALL_VALUE.equalsIgnoreCase(value.trim())) {
+            return ALL_VALUE;
         }
-        if ("department".equalsIgnoreCase(groupBy)) {
-            return "department";
-        }
-        return "instructor";
-    }
-
-    private String normalizeFilterType(String filterType) {
-        if ("course".equalsIgnoreCase(filterType)) {
-            return "course";
-        }
-        if ("instructor".equalsIgnoreCase(filterType)) {
-            return "instructor";
-        }
-        if ("department".equalsIgnoreCase(filterType)) {
-            return "department";
-        }
-        return "none";
+        return value.trim();
     }
 
     private double roundToOneDecimal(double value) {
@@ -377,9 +425,9 @@ public class CoursesDataService {
 
     public record QueryData(
             String metric,
-            String groupBy,
-            String filterType,
-            String filterValue
+            String department,
+            String course,
+            String level
     ) {}
 
     public record SummaryData(
@@ -399,5 +447,10 @@ public class CoursesDataService {
             QueryData query,
             SummaryData summary,
             List<GroupData> groups
+    ) {}
+
+    public record OptionsData(
+            List<String> departments,
+            Map<String, List<String>> coursesByDepartment
     ) {}
 }

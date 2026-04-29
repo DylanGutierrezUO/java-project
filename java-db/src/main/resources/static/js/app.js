@@ -1,22 +1,23 @@
 (() => {
     "use strict";
 
+    const ALL_VALUE = "ALL";
+
     const initialState = Object.freeze({
-        metric: "A",
-        groupBy: "instructor",
-        filterType: "none",
-        filterValue: ""
+        department: ALL_VALUE,
+        course: ALL_VALUE,
+        metric: "A"
     });
 
-    const state = { ...initialState };
+    const state = {
+        ...initialState,
+        options: null
+    };
 
     const elements = {
-        form: document.getElementById("controls-form"),
+        departmentSelect: document.getElementById("department-select"),
+        courseSelect: document.getElementById("course-select"),
         metricSelect: document.getElementById("metric-select"),
-        groupSelect: document.getElementById("group-select"),
-        filterTypeSelect: document.getElementById("filter-type-select"),
-        filterInput: document.getElementById("filter-input"),
-        resetButton: document.getElementById("reset-button"),
         chartDescription: document.getElementById("chart-description"),
         chartBars: document.getElementById("chart-bars"),
         chartEmptyState: document.getElementById("chart-empty-state"),
@@ -28,45 +29,98 @@
         currentFilter: document.getElementById("current-filter")
     };
 
-    function init() {
-        syncControlsToState();
+    async function init() {
         bindEvents();
-        loadDashboard();
+
+        try {
+            setLoadingState("Loading dashboard options...");
+            state.options = await fetchOptions();
+
+            populateDepartmentOptions();
+            updateCourseOptions();
+            syncControlsToState();
+
+            await loadDashboard();
+        } catch (error) {
+            renderError(error);
+        }
     }
 
     function bindEvents() {
-        elements.form.addEventListener("submit", async (event) => {
-            event.preventDefault();
-            updateStateFromControls();
-            await loadDashboard();
-        });
+        elements.departmentSelect.addEventListener("change", async () => {
+            state.department = elements.departmentSelect.value;
+            state.course = ALL_VALUE;
 
-        elements.resetButton.addEventListener("click", async () => {
-            Object.assign(state, initialState);
+            updateCourseOptions();
             syncControlsToState();
+
             await loadDashboard();
         });
-    }
 
-    function updateStateFromControls() {
-        state.metric = elements.metricSelect.value;
-        state.groupBy = elements.groupSelect.value;
-        state.filterType = elements.filterTypeSelect.value;
-        state.filterValue = elements.filterInput.value.trim();
+        elements.courseSelect.addEventListener("change", async () => {
+            state.course = elements.courseSelect.value;
+            await loadDashboard();
+        });
+
+        elements.metricSelect.addEventListener("change", async () => {
+            state.metric = elements.metricSelect.value;
+            await loadDashboard();
+        });
     }
 
     function syncControlsToState() {
+        elements.departmentSelect.value = state.department;
+        elements.courseSelect.value = state.course;
         elements.metricSelect.value = state.metric;
-        elements.groupSelect.value = state.groupBy;
-        elements.filterTypeSelect.value = state.filterType;
-        elements.filterInput.value = state.filterValue;
+    }
+
+    function populateDepartmentOptions() {
+        const departments = Array.isArray(state.options?.departments)
+            ? state.options.departments
+            : [];
+
+        elements.departmentSelect.innerHTML = "";
+
+        appendOption(elements.departmentSelect, ALL_VALUE, "All");
+
+        departments.forEach((department) => {
+            appendOption(elements.departmentSelect, department, department);
+        });
+    }
+
+    function updateCourseOptions() {
+        elements.courseSelect.innerHTML = "";
+        appendOption(elements.courseSelect, ALL_VALUE, "All");
+
+        if (state.department === ALL_VALUE) {
+            elements.courseSelect.disabled = true;
+            return;
+        }
+
+        const coursesByDepartment = state.options?.coursesByDepartment ?? {};
+        const courses = Array.isArray(coursesByDepartment[state.department])
+            ? coursesByDepartment[state.department]
+            : [];
+
+        courses.forEach((course) => {
+            appendOption(elements.courseSelect, course, course);
+        });
+
+        elements.courseSelect.disabled = false;
+    }
+
+    function appendOption(select, value, label) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        select.append(option);
     }
 
     async function loadDashboard() {
         try {
-            setLoadingState();
+            setLoadingState("Loading chart data...");
 
-            const payload = await fetchDistribution(state);
+            const payload = await fetchDistribution();
             const groups = Array.isArray(payload.groups) ? payload.groups : [];
             const summary = payload.summary ?? {
                 matchingRows: 0,
@@ -76,19 +130,32 @@
             };
 
             renderChart(groups, state.metric);
-            renderSummary(groups, summary, state);
+            renderSummary(groups, summary);
             renderTable(groups, state.metric);
         } catch (error) {
             renderError(error);
         }
     }
 
-    async function fetchDistribution(currentState) {
+    async function fetchOptions() {
+        const response = await fetch("/api/v1/grades/options", {
+            headers: {
+                "Accept": "application/json"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Options request failed with status ${response.status}`);
+        }
+
+        return response.json();
+    }
+
+    async function fetchDistribution() {
         const params = new URLSearchParams({
-            metric: currentState.metric,
-            groupBy: currentState.groupBy,
-            filterType: currentState.filterType,
-            filterValue: currentState.filterValue
+            metric: state.metric,
+            department: state.department,
+            course: state.course
         });
 
         const response = await fetch(`/api/v1/grades/distribution?${params.toString()}`, {
@@ -98,27 +165,29 @@
         });
 
         if (!response.ok) {
-            throw new Error(`Request failed with status ${response.status}`);
+            throw new Error(`Distribution request failed with status ${response.status}`);
         }
 
         return response.json();
     }
 
-    function setLoadingState() {
+    function setLoadingState(message) {
         elements.chartEmptyState.hidden = false;
-        elements.chartEmptyState.textContent = "Loading data...";
+        elements.chartEmptyState.textContent = message;
         elements.chartBars.innerHTML = "";
+
         elements.resultsBody.innerHTML = `
             <tr>
                 <td colspan="3">Loading results...</td>
             </tr>
         `;
+
         elements.chartDescription.textContent = "Fetching distribution data from the backend...";
         elements.topGroupLabel.textContent = "Loading...";
         elements.topGroupValue.textContent = "—";
         elements.groupCount.textContent = "0";
-        elements.currentView.textContent = `${capitalize(state.metric)} Percentage by ${capitalize(state.groupBy)}`;
-        elements.currentFilter.textContent = buildFilterLabel(state);
+        elements.currentView.textContent = `${metricLabel()} by ${groupLevelLabel()}`;
+        elements.currentFilter.textContent = scopeLabel();
     }
 
     function renderError(error) {
@@ -126,14 +195,18 @@
         elements.chartEmptyState.hidden = false;
         elements.chartEmptyState.textContent = "Unable to load data from the backend.";
         elements.chartDescription.textContent = error.message;
+
         elements.resultsBody.innerHTML = `
             <tr>
                 <td colspan="3">Unable to load results.</td>
             </tr>
         `;
+
         elements.topGroupLabel.textContent = "Error";
         elements.topGroupValue.textContent = "—";
         elements.groupCount.textContent = "0";
+        elements.currentView.textContent = `${metricLabel()} by ${groupLevelLabel()}`;
+        elements.currentFilter.textContent = scopeLabel();
     }
 
     function renderChart(groupedRows, metric) {
@@ -141,13 +214,16 @@
 
         if (groupedRows.length === 0) {
             elements.chartEmptyState.hidden = false;
-            elements.chartEmptyState.textContent = "No values are available for the current selection.";
-            elements.chartDescription.textContent = "No values are available for the current selection.";
+            elements.chartEmptyState.textContent =
+                "No results match the current selections with the current record thresholds.";
+            elements.chartDescription.textContent =
+                "No values are available for the current selection.";
             return;
         }
 
         elements.chartEmptyState.hidden = true;
-        elements.chartDescription.textContent = `Displaying ${metric} percentage averages for ${groupedRows.length} groups.`;
+        elements.chartDescription.textContent =
+            `Displaying ${metric} percentage averages for ${groupedRows.length} ${groupLevelLabel().toLowerCase()} result${groupedRows.length === 1 ? "" : "s"}.`;
 
         const maxValue = Math.max(...groupedRows.map((row) => row.value), 1);
 
@@ -175,16 +251,16 @@
         });
     }
 
-    function renderSummary(groupedRows, summary, currentState) {
-        const metricLabel = currentState.metric === "A" ? "A Percentage" : "F Percentage";
-
-        elements.currentView.textContent = `${metricLabel} by ${capitalize(currentState.groupBy)}`;
-        elements.currentFilter.textContent = buildFilterLabel(currentState);
+    function renderSummary(groupedRows, summary) {
+        elements.currentView.textContent = `${metricLabel()} by ${groupLevelLabel()}`;
+        elements.currentFilter.textContent = scopeLabel();
         elements.groupCount.textContent = String(summary.groupsReturned ?? groupedRows.length);
 
         if (groupedRows.length === 0) {
             elements.topGroupLabel.textContent = "No Result";
             elements.topGroupValue.textContent = "—";
+            elements.chartDescription.textContent =
+                `No ${groupLevelLabel().toLowerCase()} results match the current scope.`;
             return;
         }
 
@@ -193,7 +269,7 @@
 
         const matchCount = summary.matchingRows ?? 0;
         elements.chartDescription.textContent =
-            `${capitalize(currentState.groupBy)} comparison using ${metricLabel.toLowerCase()} across ${matchCount} matching row${matchCount === 1 ? "" : "s"}.`;
+            `Showing top ${groupedRows.length} ${groupLevelLabel().toLowerCase()} result${groupedRows.length === 1 ? "" : "s"} using ${metricLabel().toLowerCase()} across ${matchCount} matching record${matchCount === 1 ? "" : "s"}.`;
     }
 
     function renderTable(groupedRows, metric) {
@@ -219,17 +295,28 @@
         });
     }
 
-    function buildFilterLabel(currentState) {
-        if (currentState.filterType === "none" || currentState.filterValue.length === 0) {
-            return "No filter applied";
-        }
-
-        return `${capitalize(currentState.filterType)} filter: ${currentState.filterValue}`;
+    function metricLabel() {
+        return state.metric === "A" ? "A Percentage" : "F Percentage";
     }
 
-    function capitalize(value) {
-        const text = String(value);
-        return text.charAt(0).toUpperCase() + text.slice(1);
+    function groupLevelLabel() {
+        if (state.course !== ALL_VALUE) {
+            return "Instructor";
+        }
+        if (state.department !== ALL_VALUE) {
+            return "Course";
+        }
+        return "Department";
+    }
+
+    function scopeLabel() {
+        if (state.course !== ALL_VALUE) {
+            return `${state.department} / ${state.course}`;
+        }
+        if (state.department !== ALL_VALUE) {
+            return state.department;
+        }
+        return "All departments";
     }
 
     function escapeHtml(value) {

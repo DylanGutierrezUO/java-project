@@ -6,7 +6,7 @@
     <title>Grade Distribution Dashboard</title>
     <meta
         name="description"
-        content="Interactive dashboard for comparing grade distributions by course, instructor, and department."
+        content="Interactive dashboard for comparing grade distributions by department, course, and instructor."
     >
     <link rel="stylesheet" href="css/styles.css">
     <script src="js/app.js" defer></script>
@@ -18,7 +18,7 @@
                 <p class="site-header__eyebrow">Portfolio Project</p>
                 <h1 class="site-header__title">Grade Distribution Dashboard</h1>
                 <p class="site-header__subtitle">
-                    Explore A and F grade percentages across courses, instructors, and departments.
+                    Explore A and F grade percentages across departments, courses, and instructors.
                 </p>
             </div>
         </header>
@@ -26,12 +26,28 @@
         <main class="dashboard">
             <section class="panel panel--controls" aria-labelledby="controls-title">
                 <div class="panel__header">
-                    <h2 id="controls-title">Controls</h2>
-                    <p>Choose a metric, grouping, and optional filter to update the visualization.</p>
+                    <div>
+                        <h2 id="controls-title">Controls</h2>
+                        <p>Choose a department to compare courses, or choose a course to compare instructors.</p>
+                    </div>
                 </div>
 
-                <form id="controls-form" class="controls-form">
+                <div class="controls-form">
                     <div class="form-grid">
+                        <div class="form-field">
+                            <label for="department-select">Department</label>
+                            <select id="department-select" name="department">
+                                <option value="ALL">All</option>
+                            </select>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="course-select">Course</label>
+                            <select id="course-select" name="course" disabled>
+                                <option value="ALL">All</option>
+                            </select>
+                        </div>
+
                         <div class="form-field">
                             <label for="metric-select">Metric</label>
                             <select id="metric-select" name="metric">
@@ -39,43 +55,12 @@
                                 <option value="F">F Percentage</option>
                             </select>
                         </div>
-
-                        <div class="form-field">
-                            <label for="group-select">Group By</label>
-                            <select id="group-select" name="groupBy">
-                                <option value="instructor">Instructor</option>
-                                <option value="course">Course</option>
-                                <option value="department">Department</option>
-                            </select>
-                        </div>
-
-                        <div class="form-field">
-                            <label for="filter-type-select">Filter Type</label>
-                            <select id="filter-type-select" name="filterType">
-                                <option value="none">No Filter</option>
-                                <option value="course">Course</option>
-                                <option value="instructor">Instructor</option>
-                                <option value="department">Department</option>
-                            </select>
-                        </div>
-
-                        <div class="form-field">
-                            <label for="filter-input">Filter Value</label>
-                            <input
-                                id="filter-input"
-                                name="filterValue"
-                                type="text"
-                                placeholder="Example: CS, Smith, or CS415"
-                                autocomplete="off"
-                            >
-                        </div>
                     </div>
 
-                    <div class="form-actions">
-                        <button type="submit" class="button button--primary">Update View</button>
-                        <button type="button" id="reset-button" class="button button--secondary">Reset</button>
-                    </div>
-                </form>
+                    <p class="controls-helper">
+                        The chart updates automatically whenever you change a selection.
+                    </p>
+                </div>
             </section>
 
             <section class="panel panel--chart" aria-labelledby="chart-title">
@@ -83,7 +68,7 @@
                     <div>
                         <h2 id="chart-title">Bar Chart</h2>
                         <p id="chart-description">
-                            Displaying current results for the selected metric and grouping.
+                            Displaying current results for the selected metric and scope.
                         </p>
                     </div>
                 </div>
@@ -131,15 +116,13 @@
 
                     <article class="summary-card">
                         <span class="summary-card__label">Current View</span>
-                        <strong id="current-view" class="summary-card__value summary-card__value--small">
-                            —
-                        </strong>
+                        <strong id="current-view" class="summary-card__value summary-card__value--small">—</strong>
                     </article>
 
                     <article class="summary-card summary-card--wide">
-                        <span class="summary-card__label">Active Filter</span>
+                        <span class="summary-card__label">Current Scope</span>
                         <strong id="current-filter" class="summary-card__value summary-card__value--small">
-                            No filter applied
+                            All departments
                         </strong>
                     </article>
                 </div>
@@ -157,7 +140,7 @@
                             <tr>
                                 <th scope="col">Group</th>
                                 <th scope="col">Metric</th>
-                                <th scope="col">Sample Size</th>
+                                <th scope="col">Record Count</th>
                             </tr>
                         </thead>
                         <tbody id="results-body">
@@ -171,7 +154,7 @@
         </main>
 
         <footer class="site-footer">
-            <p>Built with vanilla JavaScript for interactive academic data visualization.</p>
+            <p>Built with vanilla JavaScript and a Java backend for interactive academic data visualization.</p>
         </footer>
     </div>
 </body>

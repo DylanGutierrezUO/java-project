@@ -21,10 +21,14 @@ public class GradesDistributionController {
     @GetMapping("/distribution")
     public CoursesDataService.DistributionData getDistribution(
             @RequestParam(defaultValue = "A") String metric,
-            @RequestParam(defaultValue = "instructor") String groupBy,
-            @RequestParam(defaultValue = "none") String filterType,
-            @RequestParam(defaultValue = "") String filterValue
+            @RequestParam(defaultValue = "ALL") String department,
+            @RequestParam(defaultValue = "ALL") String course
     ) {
-        return coursesDataService.getDistribution(metric, groupBy, filterType, filterValue);
+        return coursesDataService.getDistribution(metric, department, course);
+    }
+
+    @GetMapping("/options")
+    public CoursesDataService.OptionsData getOptions() {
+        return coursesDataService.getOptions();
     }
 }
