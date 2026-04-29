@@ -109,7 +109,7 @@ public class CoursesDataService {
             level = "department";
         }
 
-        List<GroupData> groups = buildGroups(filteredRows, level, normalizedMetric);
+        List<GroupData> groups = buildGroups(filteredRows, level, normalizedMetric, normalizedCourse);
 
         String topGroup = groups.isEmpty() ? "" : groups.get(0).label();
         double topValue = groups.isEmpty() ? 0.0 : groups.get(0).value();
@@ -259,55 +259,68 @@ public class CoursesDataService {
         return filtered;
     }
 
-    private List<GroupData> buildGroups(List<CourseRow> rows, String level, String metric) {
-        Map<String, GroupAccumulator> grouped = new LinkedHashMap<>();
+    private List<GroupData> buildGroups(
+        List<CourseRow> rows,
+        String level,
+        String metric,
+        String selectedCourse
+) {
+    Map<String, GroupAccumulator> grouped = new LinkedHashMap<>();
 
-        for (CourseRow row : rows) {
-            String label = switch (level) {
-                case "course" -> row.courseId();
-                case "instructor" -> row.instructor();
-                default -> deriveDepartment(row.courseId());
-            };
+    for (CourseRow row : rows) {
+        String label = switch (level) {
+            case "course" -> row.courseId();
+            case "instructor" -> row.instructor();
+            default -> deriveDepartment(row.courseId());
+        };
 
-            double value = "F".equals(metric) ? row.f() : row.a();
+        double value = switch (metric) {
+            case "DF" -> row.d() + row.f();
+            case "A" -> row.a();
+            default -> row.a();
+        };
 
-            GroupAccumulator acc = grouped.computeIfAbsent(label, key -> new GroupAccumulator());
-            acc.metricTotal += value;
-            acc.count += 1;
-        }
-
-        int minRecordThreshold = minimumRecordThreshold(level);
-
-        List<GroupData> results = new ArrayList<>();
-        for (Map.Entry<String, GroupAccumulator> entry : grouped.entrySet()) {
-            GroupAccumulator acc = entry.getValue();
-
-            if (acc.count < minRecordThreshold) {
-                continue;
-            }
-
-            double average = roundToOneDecimal(acc.metricTotal / acc.count);
-
-            results.add(new GroupData(
-                    entry.getKey(),
-                    average,
-                    acc.count
-            ));
-        }
-
-        results.sort(
-                Comparator.comparingDouble(GroupData::value).reversed()
-                        .thenComparing(GroupData::label, String.CASE_INSENSITIVE_ORDER)
-        );
-
-        if (results.size() > DEFAULT_GROUP_LIMIT) {
-            return new ArrayList<>(results.subList(0, DEFAULT_GROUP_LIMIT));
-        }
-
-        return results;
+        GroupAccumulator acc = grouped.computeIfAbsent(label, key -> new GroupAccumulator());
+        acc.metricTotal += value;
+        acc.count += 1;
     }
 
-    private int minimumRecordThreshold(String level) {
+    int minRecordThreshold = minimumRecordThreshold(level, selectedCourse);
+
+    List<GroupData> results = new ArrayList<>();
+    for (Map.Entry<String, GroupAccumulator> entry : grouped.entrySet()) {
+        GroupAccumulator acc = entry.getValue();
+
+        if (acc.count < minRecordThreshold) {
+            continue;
+        }
+
+        double average = roundToOneDecimal(acc.metricTotal / acc.count);
+
+        results.add(new GroupData(
+                entry.getKey(),
+                average,
+                acc.count
+        ));
+    }
+
+    results.sort(
+            Comparator.comparingDouble(GroupData::value).reversed()
+                    .thenComparing(GroupData::label, String.CASE_INSENSITIVE_ORDER)
+    );
+
+    if (results.size() > DEFAULT_GROUP_LIMIT) {
+        return new ArrayList<>(results.subList(0, DEFAULT_GROUP_LIMIT));
+    }
+
+    return results;
+    }
+
+    private int minimumRecordThreshold(String level, String selectedCourse) {
+        if ("instructor".equals(level) && !ALL_VALUE.equals(selectedCourse)) {
+            return 1;
+        }
+
         return switch (level) {
             case "course" -> MIN_COURSE_RECORDS;
             case "instructor" -> MIN_INSTRUCTOR_RECORDS;
@@ -331,9 +344,12 @@ public class CoursesDataService {
     }
 
     private String normalizeMetric(String metric) {
-        return "F".equalsIgnoreCase(metric) ? "F" : "A";
+        if ("DF".equalsIgnoreCase(metric)) {
+            return "DF";
+        }
+        return "A";
     }
-
+    
     private String normalizeSelection(String value) {
         if (value == null || value.isBlank() || ALL_VALUE.equalsIgnoreCase(value.trim())) {
             return ALL_VALUE;

@@ -211,6 +211,7 @@
 
     function renderChart(groupedRows, metric) {
         elements.chartBars.innerHTML = "";
+        elements.chartBars.classList.remove("chart-bars--compact", "chart-bars--single");
 
         if (groupedRows.length === 0) {
             elements.chartEmptyState.hidden = false;
@@ -219,6 +220,12 @@
             elements.chartDescription.textContent =
                 "No values are available for the current selection.";
             return;
+        }
+
+        if (groupedRows.length === 1) {
+            elements.chartBars.classList.add("chart-bars--single");
+        } else if (groupedRows.length <= 4) {
+            elements.chartBars.classList.add("chart-bars--compact");
         }
 
         elements.chartEmptyState.hidden = true;
@@ -296,7 +303,7 @@
     }
 
     function metricLabel() {
-        return state.metric === "A" ? "A Percentage" : "F Percentage";
+        return state.metric === "A" ? "A Percentage" : "D/F Percentage";
     }
 
     function groupLevelLabel() {
