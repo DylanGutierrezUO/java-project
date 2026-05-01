@@ -1,8 +1,8 @@
 package com.dylangutierrez.lstore;
 
 import com.dylangutierrez.lstore.dataset.json.MiniJson;
-import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
+//import jakarta.annotation.PostConstruct;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -39,8 +39,10 @@ public class CoursesDataService {
 
     private volatile List<CourseRow> cachedRows;
 
-    @PostConstruct
-    public void warmCacheOnStartup() {
+    /**
+    * Warms the in-memory cache after the dataset has been created or recovered.
+    */
+    public void warmCache() {
         long start = System.currentTimeMillis();
         System.out.println("Warming Courses data cache...");
 
@@ -144,53 +146,52 @@ public class CoursesDataService {
      */
     private List<CourseRow> readAllCourseRows() {
         Path dataDir = Paths.get(System.getProperty("lstore.data_dir", Config.DATA_DIR));
-        Database database = new Database(dataDir);
-        database.open();
 
-        try {
-            Table table = database.getTable(TABLE_NAME);
-            if (table == null) {
-                throw new IllegalStateException(
-                        "Courses table was not found in data directory: " + dataDir.toAbsolutePath()
-                );
-            }
+        // Make sure Table resolves its on-disk location consistently.
+        System.setProperty("lstore.data_dir", dataDir.toAbsolutePath().toString());
 
-            Path tableDir = dataDir.resolve(TABLE_NAME);
-            DictDecoder dicts = new DictDecoder(tableDir);
-            Query query = new Query(table);
-
-            int[] projectionMask = new int[table.numColumns];
-            Arrays.fill(projectionMask, 1);
-
-            List<Integer> baseRids = new ArrayList<>();
-            for (Integer rid : table.pageDirectory.keySet()) {
-                if (rid < Config.TAIL_RID_START && !table.deleted.contains(rid)) {
-                    baseRids.add(rid);
-                }
-            }
-            baseRids.sort(Integer::compareTo);
-
-            List<CourseRow> rows = new ArrayList<>(baseRids.size());
-
-            for (int baseRid : baseRids) {
-                Integer crn = readCrnFromBaseRid(table, baseRid);
-                if (crn == null) {
-                    continue;
-                }
-
-                List<Record> results = query.select(crn, table.key, projectionMask);
-                if (results == null || results.isEmpty()) {
-                    continue;
-                }
-
-                Record record = results.get(0);
-                rows.add(decodeRow(record.columns, dicts));
-            }
-
-            return rows;
-        } finally {
-            database.close();
+        Path tableDir = dataDir.resolve(TABLE_NAME);
+        if (!Files.isDirectory(tableDir)) {
+            throw new IllegalStateException(
+                    "Courses table directory was not found in data directory: " + dataDir.toAbsolutePath()
+            );
         }
+
+        Table table = new Table(TABLE_NAME, 10, COL_CRN, null);
+        table.recover();
+
+        DictDecoder dicts = new DictDecoder(tableDir);
+        Query query = new Query(table);
+
+        int[] projectionMask = new int[table.numColumns];
+        Arrays.fill(projectionMask, 1);
+
+        List<Integer> baseRids = new ArrayList<>();
+        for (Integer rid : table.pageDirectory.keySet()) {
+            if (rid < Config.TAIL_RID_START && !table.deleted.contains(rid)) {
+                baseRids.add(rid);
+            }
+        }
+        baseRids.sort(Integer::compareTo);
+
+        List<CourseRow> rows = new ArrayList<>(baseRids.size());
+
+        for (int baseRid : baseRids) {
+            Integer crn = readCrnFromBaseRid(table, baseRid);
+            if (crn == null) {
+                continue;
+            }
+
+            List<Record> results = query.select(crn, table.key, projectionMask);
+            if (results == null || results.isEmpty()) {
+                continue;
+            }
+
+            Record record = results.get(0);
+            rows.add(decodeRow(record.columns, dicts));
+        }
+
+        return rows;
     }
 
     /**
