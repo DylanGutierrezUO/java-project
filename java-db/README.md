@@ -95,6 +95,10 @@ src/
 │     └─ data.csv
 pom.xml
 
+## Live Demo
+
+[View the deployed app](https://gradesdashboard-dylangutierrez.up.railway.app/)
+
 ## Why This Project Exists
 
 I built this project as a study for both backend and frontend ability in one deployable application:
