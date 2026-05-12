@@ -59,6 +59,8 @@ The application treats the dataset as read-only for this demo.
 
 ### Start the application
 
+Inside java-db:
+
 ```bash
 mvn spring-boot:run
 ```
@@ -102,9 +104,9 @@ pom.xml
 
 ## Screenshots
 
-![Dashboard control view](docs/screenshots/dashboard-controls.jpg)
+![Dashboard control view](java-db/docs/screenshots/dashboard-controls.jpg)
 
-![Dashboard summary view](docs/screenshots/dashboard-summary.jpg)
+![Dashboard summary view](java-db/docs/screenshots/dashboard-summary.jpg)
 
 ## Live Demo
 
