@@ -64,7 +64,10 @@ mvn spring-boot:run
 ```
 
 Then open:
+
+```text
 http://localhost:8080/
+```
 
 ### Startup Behavior
 
@@ -76,6 +79,7 @@ On startup, the application:
 
 ## Project Structure
 
+```text
 src/
 ├─ main/
 │  ├─ java/com/dylangutierrez/lstore/
@@ -94,14 +98,26 @@ src/
 │     │  └─ js/app.js
 │     └─ data.csv
 pom.xml
+```
+
+## Screenshots
+
+![Dashboard control view](docs/screenshots/dashboard-controls.jpg)
+
+![Dashboard summary view](docs/screenshots/dashboard-summary.jpg)
 
 ## Live Demo
 
 [View the deployed app](https://gradesdashboard-dylangutierrez.up.railway.app/)
 
+Railway notes:
+
+- Railway will set free-user projects, like mine, to offline after a period of time. I can redeploy if needed.
+- Railway has a limited amount of memory available for free-users. Too many people using the web app at the same time will cause a memory shortage and all users will be unable to request new graphs.
+
 ## Why This Project Exists
 
-I built this project as a study for both backend and frontend ability in one deployable application:
+I built this project to showcase both backend and frontend ability in one deployable Java application:
 
 - designing and implementing a custom Java database system
 - exposing that data through a Java API
